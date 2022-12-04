@@ -1,0 +1,270 @@
+--Jessica Noel 10445079
+--CS 442 - HW1
+--I pledge my honor that I have abided by the Stevens Honor System
+
+--QUERY ONE--
+
+with start as 
+( 
+	select prod, min(quant) as min_q, max(quant) as max_q, avg(quant) as avg_q
+	from sales
+	group by prod
+),
+
+min_dates as
+(
+	select start.prod, start.min_q, sales.cust as min_cust, sales.date as min_d, sales.state as min_s, start.max_q, start.avg_q
+	from start, sales
+	where start.prod = sales.prod and start.min_q = sales.quant
+)
+	select min_dates.prod as product, min_dates.max_q, sales.cust as max_cust, sales.date as max_date, sales.state as st, min_dates.min_q, min_dates.min_cust as min_cust, min_dates.min_d as min_date, min_dates.min_s as st, min_dates.avg_q
+	from min_dates, sales
+	where min_dates.prod = sales.prod and min_dates.max_q = sales.quant
+order by product
+
+
+
+
+
+
+
+-- QUERY TWO--
+
+--For customer and product compute the maximum quantity for NY
+--Join 1st query and sales to get max date date for NY
+-- For customer and product computer minimum quanity for NJ
+-- join query 3 with sales to get minimum date for NJ
+-- Same for CT
+--Final step join query 2, 4, 6
+
+with query1 as (
+    SELECT cust as customer, prod as product, MAX(quant) as NY_MAX
+    FROM sales
+    WHERE state='NY'
+    GROUP BY cust, prod
+),
+
+query2 as (
+    SELECT cust as customer, prod as product, MIN(quant) as NJ_MIN
+    FROM sales
+    WHERE state = 'NJ' and year > 2000
+    GROUP BY cust, prod
+    order by cust
+),
+
+query3 as (
+    SELECT cust as customer, prod as product, MIN(quant) as CT_MIN
+    FROM sales
+    WHERE state = 'CT' and year > 2000
+    GROUP BY cust, prod
+    order by cust
+),
+
+query4 as (
+    select query1.customer,  query1.product, NY_MAX, NJ_MIN, CT_MIN
+    from query1, query2, query3
+    where query1.customer = query2.customer and query1.product = query2.product and query1.customer = query3.customer and query1.product = query3.product
+)
+
+    select customer, product, NY_MAX, s1.date, NJ_MIN, s2.date, CT_MIN, s3.date
+    from query4, sales as s1, sales as s2, sales as s3
+    where query4.customer = s1.cust and query4.customer = s2.cust and query4.customer = s3.cust and query4.product = s1.prod and query4.product = s2.prod and query4.product = s3.prod
+    and NY_MAX = s1.quant and NJ_MIN = s2.quant and CT_MIN = s3.quant and s1.state = 'NY' and s2.state = 'NJ' and s3.state = 'CT'
+
+
+
+
+
+
+--QUERY THREE--
+
+with start as 
+(
+	select month, state, sum(quant) as sum_quant
+	from sales
+	group by month, state
+),
+
+max_pop as 
+(
+	select month, max(sum_quant) as pop_st
+	from start
+	group by month
+),
+
+maxpop_match as 
+(
+	select max_pop.month, start.state as max_st, min(sum_quant) as pop_st
+	from start, sales, max_pop
+	where pop_st = start.sum_quant and max_pop.month = start.month
+	group by max_pop.month, start.state
+),
+
+min_pop as 
+(
+	select month, min(sum_quant) as min_pop
+	from start
+	group by month
+),
+
+minpop_match as 
+(
+	select min_pop.month, start.state as minstate_pop, min(sum_quant) as npop_st
+	from start, sales, min_pop
+	where min_pop = start.sum_quant and min_pop.month = start.month
+	group by min_pop.month, start.state
+)
+
+select distinct maxpop_match.month as month, max_st as MOST_POPULAR_ST, pop_st as MOST_POP_TOTAL_Q, minstate_pop as LEAST_POPULAR_ST, npop_st as LEAST_POP_TOTAL_Q
+from minpop_match, maxpop_match, start
+where maxpop_match.month = minpop_match.month
+order by maxpop_match.month
+
+
+
+
+
+
+--QUERY FOUR--
+
+with a as (
+    (with start as (
+        select cust, prod, sum(quant) as sum_quant
+        from sales
+        group by cust, prod
+    ),
+
+    fav_prod as (
+        select cust, max(sum_quant) as fav_q
+        from start
+        group by cust
+    ),
+
+    fav_match as(
+        select fav_prod.cust, prod as MOST_FAV_PROD
+        from start, fav_prod
+        where fav_q = sum_quant
+    ),
+
+    notfav_prod as (
+        select cust, min(sum_quant) as lfav_q
+        from start
+        group by cust
+    ),
+
+    notfav_match as(
+        select notfav_prod.cust, prod as LEAST_FAV_PROD
+        from start, notfav_prod
+        where lfav_q = sum_quant
+    )
+
+    select notfav_match.cust as CUSTOMER, MOST_FAV_PROD, LEAST_FAV_PROD
+    from notfav_match, fav_match
+    where notfav_match.cust = fav_match.cust)
+),
+
+b as (
+    with start as (
+        select cust, state, sum(quant) as sum_quant
+        from sales
+        group by cust, state
+    ),
+
+    fav_st as (
+        select cust, max(sum_quant) as fav_q
+        from start
+        group by cust
+    ),
+
+    fav_match as(
+        select fav_st.cust, state as MOST_FAV_ST
+        from start, fav_st
+        where fav_q = sum_quant
+    ),
+
+    notfav_st as (
+        select cust, min(sum_quant) as lfav_q
+        from start
+        group by cust
+    ),
+
+    notfav_match as(
+        select notfav_st.cust, state as LEAST_FAV_ST
+        from start, notfav_st
+        where lfav_q = sum_quant
+    )
+    
+    select notfav_match.cust as CUSTOMER, MOST_FAV_ST, LEAST_FAV_ST
+    from notfav_match, fav_match
+    where notfav_match.cust = fav_match.cust
+    order by notfav_match
+)
+
+select a.customer, a.MOST_FAV_PROD, a.LEAST_FAV_PROD, b.MOST_FAV_ST, b.LEAST_FAV_ST
+    FROM a
+    JOIN b
+        ON a.customer = b.customer
+
+
+
+
+
+
+
+--QUERY 5--
+
+--1.) compute q1 (quarter 1)
+WITH q1 as (
+        select cust as customer, prod as product, sum(quant) as Q1_TOT
+        from sales
+        where month between 1 and 3
+        group by customer, product
+),
+--2.) compute q2 (quarter 2)
+q2 as (
+        select cust as customer, prod as product, sum(quant) as Q2_TOT
+        from sales
+        where month between 4 and 6
+        group by customer, product
+),
+--3.) compute q3 (quarter 3)
+q3 as (
+        select cust as customer, prod as product, sum(quant) as Q3_TOT
+        from sales
+        where month between 7 and 9
+        group by customer, product
+),
+--4.) compute q4 (quarter 4)
+q4 as (
+        select cust as customer, prod as product, sum(quant) as Q4_TOT
+        from sales
+        where month between 10 and 12
+        group by customer, product
+),
+-- 5.) JOIN TABLES AND FIND AVG SUM COUNT
+
+q5 as (
+    select cust as customer, prod as product, sum(quant) as TOTAL
+    from sales
+    group by customer, product
+),
+
+q7 as (
+    select T.customer, T.product, T.TOTAL/4 as AVERAGE
+    from (select cust as customer, prod as product, sum(quant) as TOTAL
+          from sales
+          group by customer, product) as T
+    group by  T.customer, T.product, T.TOTAL/4
+
+),
+
+q6 as (
+    select cust as customer, prod as product, count(quant) as COUNT
+    from sales
+    group by cust, prod
+)
+
+    select q1.customer, q1.product, q1.Q1_TOT, q2.Q2_TOT, q3.Q3_TOT, q4.Q4_TOT, AVERAGE, TOTAL, q6.COUNT
+    from q1, q2, q3, q4, q5, q6, q7
+    where q1.customer = q2.customer and q2.customer = q3.customer and q3.customer = q4.customer and q4.customer = q5.customer and q5.customer = q6.customer and q6.customer = q7.customer and
+    q1.product = q2.product and q2.product = q3.product and q3.product = q4.product and q4.product = q5.product and q5.product = q6.product and q6.product = q7.product
